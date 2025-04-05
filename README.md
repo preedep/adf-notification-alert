@@ -179,3 +179,32 @@ sequenceDiagram
 ```
 
 This sequence diagram shows how ADF communicates securely with Logic App and forwards alert notifications through Azure Communication Services.
+
+---
+
+## ⚠️ Configuration Required Before Use
+
+Before deploying this Logic App, make sure to modify the following attributes in the **email HTTP request body**:
+
+```json
+"body": {
+    "senderAddress": "DoNotReply@preedee.space",
+    "recipients": {
+        "to": [
+            {
+                "address": "XXXX",
+                "displayName": "XXX"
+            }
+        ]
+    },
+    "content": {
+        "subject": "@outputs('Set_Subject')",
+        "html": "@outputs('Set_Body')"
+    }
+}
+```
+
+- 🔧 Replace `senderAddress` with your **verified sender** in Azure Communication Services
+- 🧑‍💼 Replace the `recipients.to` with your actual recipient(s) for the email
+
+> 💡 This step is required to ensure successful email delivery. Azure Communication Services will reject requests using unverified or placeholder sender addresses.
