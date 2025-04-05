@@ -1,5 +1,5 @@
 
-# Azure Logic App - Reference Architecture and Guideline ADF Email Notification via Azure Communication Services
+# Azure Logic App - ADF Email Notification via Azure Communication Services
 
 This Logic App is designed to handle **ADF pipeline status notifications** (both success and failure) and send emails through **Azure Communication Services (ACS)** with built-in **retry and exponential backoff** logic.
 
@@ -139,3 +139,43 @@ Authorization: Bearer <your_token>
 ## 📣 Contact
 
 For further enhancement, maintenance, or integration into additional environments (UAT/Prod), please contact your platform/DevOps team or solution architect.
+
+---
+
+## 🔗 Reference: Using Managed Identity from ADF to Logic App
+
+This solution leverages the secure practice of calling the Logic App from ADF using **Managed Identity** through a Web Activity.
+
+### 🔄 ADF → Logic App via Web Activity (Managed Identity)
+
+- Use **Web Activity** in ADF to trigger the Logic App endpoint.
+- In the Web Activity settings:
+  - Select `Authentication` = `Managed Identity`
+  - Use `System Assigned Managed Identity` from ADF
+  - Add the Logic App's **"Managed Identity Caller"** role for the ADF identity
+
+📚 **Official guide:**
+👉 [Use Azure Data Factory to invoke Logic App via Managed Identity](https://techcommunity.microsoft.com/blog/integrationsonazureblog/use-azure-data-factory-to-invoke-logic-app-via-managed-identity-authentication/3804218)
+
+> This ensures that all communication is secured via Azure AD without the need for secrets or hardcoded tokens.
+
+---
+
+## 📊 Integration Flow (Mermaid Diagram)
+
+```mermaid
+sequenceDiagram
+    participant ADF as Azure Data Factory (ADF)
+    participant LogicApp as Azure Logic App
+    participant ACS as Azure Communication Services
+    participant Email as Recipient
+
+    ADF->>LogicApp: HTTP POST (with Managed Identity)
+    LogicApp->>LogicApp: Validate & Parse Payload
+    LogicApp->>ACS: Send Email (using Managed Identity)
+    ACS-->>LogicApp: 202 Accepted (or error)
+    LogicApp-->>ADF: Response (200 OK or failure)
+    ACS-->>Email: Delivers Email Notification
+```
+
+This sequence diagram shows how ADF communicates securely with Logic App and forwards alert notifications through Azure Communication Services.
