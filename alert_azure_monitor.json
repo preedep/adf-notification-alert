@@ -1,0 +1,485 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_a_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "data": {
+                                "type": "object",
+                                "properties": {
+                                    "alertContext": {
+                                        "type": "object",
+                                        "properties": {
+                                            "condition": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "allOf": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "dimensions": {
+                                                                    "type": "array"
+                                                                },
+                                                                "metricName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "metricNamespace": {
+                                                                    "type": "string"
+                                                                },
+                                                                "metricValue": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "operator": {
+                                                                    "type": "string"
+                                                                },
+                                                                "threshold": {
+                                                                    "type": "string"
+                                                                },
+                                                                "timeAggregation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "webTestName": {}
+                                                            },
+                                                            "required": [
+                                                                "dimensions",
+                                                                "metricName",
+                                                                "metricNamespace",
+                                                                "metricValue",
+                                                                "operator",
+                                                                "threshold",
+                                                                "timeAggregation",
+                                                                "webTestName"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "staticThresholdFailingPeriods": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "minFailingPeriodsToAlert": {
+                                                                "type": "integer"
+                                                            },
+                                                            "numberOfEvaluationPeriods": {
+                                                                "type": "integer"
+                                                            }
+                                                        }
+                                                    },
+                                                    "windowEndTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "windowSize": {
+                                                        "type": "string"
+                                                    },
+                                                    "windowStartTime": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            },
+                                            "conditionType": {
+                                                "type": "string"
+                                            },
+                                            "properties": {}
+                                        }
+                                    },
+                                    "customProperties": {},
+                                    "essentials": {
+                                        "type": "object",
+                                        "properties": {
+                                            "alertContextVersion": {
+                                                "type": "string"
+                                            },
+                                            "alertId": {
+                                                "type": "string"
+                                            },
+                                            "alertRule": {
+                                                "type": "string"
+                                            },
+                                            "alertRuleID": {
+                                                "type": "string"
+                                            },
+                                            "alertTargetIDs": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "configurationItems": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "description": {
+                                                "type": "string"
+                                            },
+                                            "essentialsVersion": {
+                                                "type": "string"
+                                            },
+                                            "firedDateTime": {
+                                                "type": "string"
+                                            },
+                                            "investigationLink": {
+                                                "type": "string"
+                                            },
+                                            "monitorCondition": {
+                                                "type": "string"
+                                            },
+                                            "monitoringService": {
+                                                "type": "string"
+                                            },
+                                            "originAlertId": {
+                                                "type": "string"
+                                            },
+                                            "severity": {
+                                                "type": "string"
+                                            },
+                                            "signalType": {
+                                                "type": "string"
+                                            },
+                                            "targetResourceGroup": {
+                                                "type": "string"
+                                            },
+                                            "targetResourceType": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "schemaId": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Set_Log_Analytic_Query": {
+                "type": "Compose",
+                "inputs": {
+                    "query": "@{if(equals(variables('severity'), 'high'), 'let statusToCheck = \"Failed\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")', 'let statusToCheck = \"Succeeded\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")')}",
+                    "timespan": "@concat(triggerBody()?['data']?['alertContext']?['condition']?['windowStartTime'], '/', triggerBody()?['data']?['alertContext']?['condition']?['windowEndTime'])"
+                },
+                "runAfter": {
+                    "Initialize_mailSentSuccess": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Query_Log_Analytics": {
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://api.loganalytics.io/v1/workspaces/7ebf95d2-cdd0-4490-869f-d54ce63bd1dc/query",
+                    "method": "POST",
+                    "body": "@outputs('Set_Log_Analytic_Query')",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://api.loganalytics.io"
+                    }
+                },
+                "runAfter": {
+                    "Set_Log_Analytic_Query": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Debug_Log_Analytics_Response": {
+                "type": "Compose",
+                "inputs": "@body('Query_Log_Analytics')",
+                "runAfter": {
+                    "Query_Log_Analytics": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "For_Each_Pipeline_Error": {
+                "type": "Foreach",
+                "foreach": "@body('Query_Log_Analytics')?['tables'][0]?['rows']",
+                "actions": {
+                    "Get_Pipeline_Name_and_Error": {
+                        "type": "Compose",
+                        "inputs": {
+                            "severity": "@variables('severity')",
+                            "app_name": "CCWP",
+                            "resource_group": "@toUpper(triggerBody()?['data']?['essentials']?['targetResourceGroup'])",
+                            "adf_name": "@items('For_Each_Pipeline_Error')[0]",
+                            "service_name": "@items('For_Each_Pipeline_Error')[0]",
+                            "pipeline_name": "@items('For_Each_Pipeline_Error')[2]",
+                            "error_message": "@items('For_Each_Pipeline_Error')[9]",
+                            "execution_date_time": "@formatDateTime(convertTimeZone(items('For_Each_Pipeline_Error')[3],'UTC','SE Asia Standard Time'),'dd/MM/yyyy HH:mm:ss')"
+                        }
+                    },
+                    "Set_Subject": {
+                        "type": "Compose",
+                        "inputs": "@{concat('ADF ', if(equals(toLower(outputs('Get_Pipeline_Name_and_Error')?['severity']), 'high'), 'Fail', 'Completed'), ' : ', toUpper(outputs('Get_Pipeline_Name_and_Error')?['app_name']), '/', toUpper(outputs('Get_Pipeline_Name_and_Error')?['resource_group']), '/SCB/', outputs('Get_Pipeline_Name_and_Error')?['pipeline_name'], '  **', outputs('Get_Pipeline_Name_and_Error')?['execution_date_time'],'**' )}",
+                        "runAfter": {
+                            "Get_Pipeline_Name_and_Error": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Set_Body": {
+                        "type": "Compose",
+                        "inputs": "@{concat('<b>Mail message from ADF</b><br/><br/> ', '<br/><b>Resource Group:</b> ', toUpper(outputs('Get_Pipeline_Name_and_Error')?['resource_group']), '<br/><b>App Name:</b> ', toUpper(outputs('Get_Pipeline_Name_and_Error')?['app_name']), '<br/><b>Service Name:</b> ', outputs('Get_Pipeline_Name_and_Error')?['service_name'], '<br/><b>Pipeline:</b> ', coalesce(outputs('Get_Pipeline_Name_and_Error')?['pipeline_name'], 'N/A'), '<br/><b>Date :</b> ', coalesce(outputs('Get_Pipeline_Name_and_Error')?['execution_date_time'], 'N/A'), '<br/><br/>', if(equals(toLower(outputs('Get_Pipeline_Name_and_Error')?['severity']), 'high'), concat('<b>Error:</b> ', outputs('Get_Pipeline_Name_and_Error')?['error_message']), '<b>Message:</b> Completed'))}",
+                        "runAfter": {
+                            "Set_Subject": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Log_Entry": {
+                        "type": "Compose",
+                        "inputs": {
+                            "severity": "@outputs('Get_Pipeline_Name_and_Error')?['severity']",
+                            "subject": "@outputs('Set_Subject')",
+                            "timestamp": "@utcNow()",
+                            "pipeline": "@outputs('Get_Pipeline_Name_and_Error')?['pipeline_name']",
+                            "status_message": "@outputs('Get_Pipeline_Name_and_Error')?['error_message']"
+                        },
+                        "runAfter": {
+                            "Set_Body": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Until_Send_Email": {
+                        "type": "Until",
+                        "expression": "@or(equals(variables('retryCount'), 3), variables('mailSentSuccess'))",
+                        "limit": {
+                            "count": 6,
+                            "timeout": "PT3M"
+                        },
+                        "actions": {
+                            "Send_Email_Try": {
+                                "type": "Http",
+                                "inputs": {
+                                    "uri": "https://nickcsdev003.asiapacific.communication.azure.com/emails:send?api-version=2023-03-31",
+                                    "method": "POST",
+                                    "headers": {
+                                        "Content-Type": "application/json"
+                                    },
+                                    "body": {
+                                        "senderAddress": "DoNotReply@preedee.space",
+                                        "recipients": {
+                                            "to": [
+                                                {
+                                                    "address": "nickmsft@mac.com",
+                                                    "displayName": "Nick"
+                                                }
+                                            ]
+                                        },
+                                        "content": {
+                                            "subject": "@outputs('Set_Subject')",
+                                            "html": "@outputs('Set_Body')"
+                                        }
+                                    },
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity",
+                                        "audience": "https://communication.azure.com/"
+                                    }
+                                }
+                            },
+                            "Debug_StatusCode": {
+                                "type": "Compose",
+                                "inputs": "@outputs('Send_Email_Try')",
+                                "runAfter": {
+                                    "Send_Email_Try": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            },
+                            "Check_Send_Status": {
+                                "type": "If",
+                                "expression": "@equals(string(outputs('Send_Email_Try')?['statusCode']), '202')",
+                                "actions": {
+                                    "Set_Mail_Success": {
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "mailSentSuccess",
+                                            "value": true
+                                        }
+                                    }
+                                },
+                                "else": {
+                                    "actions": {}
+                                },
+                                "runAfter": {
+                                    "Send_Email_Try": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            },
+                            "Check_Need_Increment": {
+                                "type": "If",
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "equals": [
+                                                "@variables('mailSentSuccess')",
+                                                false
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "actions": {
+                                    "Increment_Retry": {
+                                        "type": "IncrementVariable",
+                                        "inputs": {
+                                            "name": "retryCount",
+                                            "value": 1
+                                        }
+                                    }
+                                },
+                                "else": {
+                                    "actions": {}
+                                },
+                                "runAfter": {
+                                    "Check_Send_Status": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            },
+                            "Check_Need_Delay": {
+                                "type": "If",
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "equals": [
+                                                "@variables('mailSentSuccess')",
+                                                false
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "actions": {
+                                    "Delay_Between_Attempts": {
+                                        "type": "Wait",
+                                        "inputs": {
+                                            "interval": {
+                                                "count": "@if(equals(variables('retryCount'), 0), 5, if(equals(variables('retryCount'), 1), 10, if(equals(variables('retryCount'), 2), 20, if(equals(variables('retryCount'), 3), 40, 60))))",
+                                                "unit": "Second"
+                                            }
+                                        }
+                                    }
+                                },
+                                "else": {
+                                    "actions": {}
+                                },
+                                "runAfter": {
+                                    "Check_Need_Increment": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Log_Entry": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Terminate_On_Success": {
+                        "type": "If",
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@variables('mailSentSuccess')",
+                                        true
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {},
+                        "else": {
+                            "actions": {}
+                        },
+                        "runAfter": {
+                            "Until_Send_Email": [
+                                "Succeeded"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Query_Log_Analytics": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_retryCount": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "retryCount",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_severity": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_mailSentSuccess": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "mailSentSuccess",
+                            "type": "boolean",
+                            "value": false
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_retryCount": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_severity": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "severity",
+                            "type": "string",
+                            "value": "@if(or(equals(toLower(triggerBody()?['data']?['essentials']?['severity']), 'sev0'), equals(toLower(triggerBody()?['data']?['essentials']?['severity']), 'sev1')), 'high', 'info')"
+                        }
+                    ]
+                },
+                "runAfter": {}
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {}
+        }
+    }
+}
