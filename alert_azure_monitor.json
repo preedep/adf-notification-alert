@@ -165,8 +165,8 @@
             "Set_Log_Analytic_Query": {
                 "type": "Compose",
                 "inputs": {
-                    "query": "@{if(equals(variables('severity'), 'high'), 'let statusToCheck = \"Failed\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")', 'let statusToCheck = \"Succeeded\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")')}",
-                    "timespan": "@concat(triggerBody()?['data']?['alertContext']?['condition']?['windowStartTime'], '/', triggerBody()?['data']?['alertContext']?['condition']?['windowEndTime'])"
+                    "query": "@{if(equals(variables('severity'), 'high'), 'let statusToCheck = \"Failed\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")', 'let statusToCheck = \"Succeeded\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")')}",
+                    "timespan": "@{concat(subtractFromTime(triggerBody()?['data']?['alertContext']?['condition']?['windowStartTime'], 10, 'Minute'), '/', addToTime(triggerBody()?['data']?['alertContext']?['condition']?['windowEndTime'], 10, 'Minute'))}"
                 },
                 "runAfter": {
                     "Initialize_mailSentSuccess": [
@@ -218,8 +218,9 @@
                             "adf_name": "@items('For_Each_Pipeline_Error')[0]",
                             "service_name": "@items('For_Each_Pipeline_Error')[0]",
                             "pipeline_name": "@items('For_Each_Pipeline_Error')[2]",
-                            "error_message": "@items('For_Each_Pipeline_Error')[9]",
-                            "execution_date_time": "@formatDateTime(convertTimeZone(items('For_Each_Pipeline_Error')[3],'UTC','SE Asia Standard Time'),'dd/MM/yyyy HH:mm:ss')"
+                            "pipeline_status": "@items('For_Each_Pipeline_Error')[3]",
+                            "error_message": "@items('For_Each_Pipeline_Error')[10]",
+                            "execution_date_time": "@formatDateTime(convertTimeZone(items('For_Each_Pipeline_Error')[4],'UTC','SE Asia Standard Time'),'dd/MM/yyyy HH:mm:ss')"
                         }
                     },
                     "Set_Subject": {
@@ -314,7 +315,12 @@
                                     }
                                 },
                                 "else": {
-                                    "actions": {}
+                                    "actions": {
+                                        "Send_Mail_Fail_Action": {
+                                            "type": "Compose",
+                                            "inputs": "Send Mail Failed"
+                                        }
+                                    }
                                 },
                                 "runAfter": {
                                     "Send_Email_Try": [
@@ -344,7 +350,12 @@
                                     }
                                 },
                                 "else": {
-                                    "actions": {}
+                                    "actions": {
+                                        "No_Need_Increment": {
+                                            "type": "Compose",
+                                            "inputs": "Send Mail Success , No Need Try"
+                                        }
+                                    }
                                 },
                                 "runAfter": {
                                     "Check_Send_Status": [
@@ -376,7 +387,12 @@
                                     }
                                 },
                                 "else": {
-                                    "actions": {}
+                                    "actions": {
+                                        "No_Need_Delay": {
+                                            "type": "Compose",
+                                            "inputs": "No Need Delay "
+                                        }
+                                    }
                                 },
                                 "runAfter": {
                                     "Check_Need_Increment": [
