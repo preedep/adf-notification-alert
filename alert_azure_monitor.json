@@ -158,14 +158,20 @@
                             }
                         }
                     }
-                }
+                },
+                "conditions": [
+                    {
+                        "expression": "@startsWith(triggerOutputs()?['headers']?['Authorization'], 'Bearer')"
+                    }
+                ],
+                "operationOptions": "IncludeAuthorizationHeadersInOutputs"
             }
         },
         "actions": {
             "Set_Log_Analytic_Query": {
                 "type": "Compose",
                 "inputs": {
-                    "query": "@{if(equals(variables('severity'), 'high'), 'let statusToCheck = \"Failed\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")', 'let statusToCheck = \"Succeeded\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")')}",
+                    "query": "@{if(equals(variables('severity'), 'high'), 'let statusToCheck = \"Failed\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | distinct FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityRunStart, ActivityRunEnd, Error | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")', 'let statusToCheck = \"Succeeded\"; let ADFActivity = ADFActivityRun | where Status == statusToCheck; let ADFPipeline = ADFPipelineRun | where Status == statusToCheck | extend FactoryName = extract(@\"FACTORIES/([^/]+)\", 1, tostring(ResourceId)) | project PipelineRunId = RunId, PipelineName, PipelineStart = Start, PipelineEnd = End, FactoryName, PipelineStatus = Status; ADFActivity | join kind=inner (ADFPipeline) on PipelineRunId | project FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityName, FailureType, Error, ActivityRunStart = Start, ActivityRunEnd = End | distinct FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd, ActivityRunStart, ActivityRunEnd, Error | summarize TotalActivities = count(), FirstActivityStart = min(ActivityRunStart), LastActivityEnd = max(ActivityRunEnd), ErrorMessages = make_list(Error, 100) by FactoryName, PipelineRunId, PipelineName, PipelineStatus, PipelineStart, PipelineEnd | extend ConcatenatedErrors = strcat_array(ErrorMessages, \"\\n\")')}",
                     "timespan": "@{concat(subtractFromTime(triggerBody()?['data']?['alertContext']?['condition']?['windowStartTime'], 10, 'Minute'), '/', addToTime(triggerBody()?['data']?['alertContext']?['condition']?['windowEndTime'], 10, 'Minute'))}"
                 },
                 "runAfter": {
@@ -277,8 +283,8 @@
                                         "recipients": {
                                             "to": [
                                                 {
-                                                    "address": "nickmsft@mac.com",
-                                                    "displayName": "Nick"
+                                                    "address": "XXX",
+                                                    "displayName": "XXX"
                                                 }
                                             ]
                                         },
@@ -481,6 +487,15 @@
                         }
                     ]
                 },
+                "runAfter": {
+                    "Debug_Token": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Debug_Token": {
+                "type": "Compose",
+                "inputs": "@startsWith(triggerOutputs()?['headers']?['Authorization'], 'Bearer')",
                 "runAfter": {}
             }
         },

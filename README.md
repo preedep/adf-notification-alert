@@ -1,4 +1,3 @@
-
 # Azure Logic App - ADF Email Notification via Azure Communication Services
 
 This Logic App is designed to handle **ADF pipeline status notifications** (both success and failure) and send emails through **Azure Communication Services (ACS)** with built-in **retry and exponential backoff** logic.
@@ -7,30 +6,47 @@ This Logic App is designed to handle **ADF pipeline status notifications** (both
 
 ## ✅ Use Case
 
-This Logic App acts as a common notification endpoint for ADF pipelines across multiple applications in the organization. It formats and sends a customized HTML email using minimal input data and is built to be extended for other channels (Teams, logging, etc.)
+This Logic App acts as a common notification endpoint for ADF pipelines across multiple applications in the organization. It supports **two patterns** of notification input:
+
+### 🔹 Pattern 1: Custom ADF Web Activity
+ADF calls this Logic App via HTTP `POST` Web Activity with a defined payload schema. Authentication is handled via **Managed Identity** of ADF.
+
+### 🔸 Pattern 2: Azure Monitor Alert (Common Schema)
+Azure Monitor Metric Alerts (e.g., for ADF failures/success) trigger this Logic App using a **secure webhook** (with AAD auth). The Logic App queries **Log Analytics** to enrich the alert before sending the email.
 
 ---
 
 ## 📬 How It Works
 
-1. **Trigger**: HTTP `POST` with JSON payload
-2. **Authorization**: Checks for `Bearer` token in `Authorization` header
-3. **Extract** input fields and generate:
-   - Email **subject**
-   - Email **HTML body**
-4. **Retry Loop**:
-   - Send email through **ACS Email API**
-   - If `statusCode == 202`, consider it success
-   - Retry with exponential backoff if failed
-5. **Terminate** with success message when email is sent or retries exhausted
+### Pattern 1 - Web Activity Trigger (Custom Payload)
+
+1. ADF pipeline calls this Logic App via HTTP POST with predefined payload
+2. Logic App:
+   - Parses the JSON payload
+   - Composes HTML Email body + subject
+   - Sends email via **ACS Email API**
+   - Retries with exponential backoff if failed
+3. Logic App terminates after success or maximum retries
+
+### Pattern 2 - Azure Monitor Common Alert Trigger
+
+1. Azure Monitor fires **Metric Alert** → triggers this Logic App via **Secure Webhook**
+2. Logic App:
+   - Authorizes via AAD using **audience: api://<APP_ID>**
+   - Parses Common Alert Schema
+   - Queries Log Analytics for detailed ADF pipeline run
+   - Composes and sends formatted HTML email via **ACS**
+   - Retries on failure
 
 ---
 
-## 📦 Payload Specification
+## 📦 Payload Specifications
 
-The Logic App expects a JSON payload via HTTP POST. Below is the required structure:
+### Pattern 1 - Custom Payload
 
-### 🔹 Required Fields (Mandatory)
+See: [`alert_custom.json`](./alert_custom.json)
+
+#### Required Fields
 
 | Field                | Type     | Description                                |
 |----------------------|----------|--------------------------------------------|
@@ -43,12 +59,21 @@ The Logic App expects a JSON payload via HTTP POST. Below is the required struct
 | `execution_date_time`| string   | Format `dd/MM/yyyy HH:mm:ss`              |
 | `message`            | string   | Message to include in email                |
 
-### 🔸 Optional Fields
+#### Optional Fields
 
 | Field               | Type       | Description                                |
 |---------------------|------------|--------------------------------------------|
 | `batch_date`        | string     | Format `dd/MM/yyyy`                         |
 | `error_code`        | string     | Only relevant if `severity = high`         |
+
+---
+
+### Pattern 2 - Azure Monitor Alert (Common Schema)
+
+See: [`alert_azure_monitor.json`](./alert_azure_monitor.json)
+
+- The Logic App expects **Common Alert Schema** payload via secure webhook
+- Enriches data from Log Analytics via Managed Identity query
 
 ---
 
@@ -64,43 +89,6 @@ The Logic App expects a JSON payload via HTTP POST. Below is the required struct
   - Pipeline
   - Execution time
   - Message (and error code if failure)
-
----
-
-## 🧪 Example Payloads
-
-### ✅ ADF Completed Example
-
-```json
-{
-  "severity": "info",
-  "version": "1.0a",
-  "resource_group": "rg-adf-prod",
-  "app_name": "ccwp",
-  "execution_date_time": "05/04/2025 07:30:00",
-  "pipeline_name": "CopyDataToBlob",
-  "service_name": "adf-ccwp-pipeline",
-  "message": "Data pipeline completed successfully"
-}
-```
-
----
-
-### ❌ ADF Fail Example
-
-```json
-{
-  "severity": "high",
-  "version": "1.0a",
-  "resource_group": "rg-adf-prod",
-  "app_name": "ccwp",
-  "execution_date_time": "05/04/2025 07:30:00",
-  "pipeline_name": "CopyDataToBlob",
-  "service_name": "adf-ccwp-pipeline",
-  "error_code": "DF-5001",
-  "message": "Error copying data to Blob Storage"
-}
-```
 
 ---
 
@@ -126,42 +114,32 @@ You can easily extend this Logic App to:
 
 ## 🔐 Authorization
 
-The Logic App expects a `Bearer` token in the request header:
+### Pattern 1 - Custom ADF Call
+
+- Uses **System Assigned Managed Identity** of ADF
+- Logic App requires "Managed Identity Caller" role assignment
 
 ```http
-Authorization: Bearer <your_token>
+Authorization: Managed Identity (automatically handled by ADF)
 ```
 
-> You can enforce token validation via Azure API Management or Function Proxy as a security gateway.
+### Pattern 2 - Azure Monitor Alert (Secure Webhook)
+
+- Azure Monitor Action Group (Azns AAD Webhook) calls Logic App with **AAD token**
+- Logic App trigger uses `Authorize with AAD` policy
+- Required:
+  - `audience`: `api://<app-id>` from Logic App App Registration (Expose API)
+  - `Object ID`: from Azure Monitor Action Group Identity
 
 ---
 
-## 📣 Contact
+## 🔗 ADF to Logic App Setup
 
-For further enhancement, maintenance, or integration into additional environments (UAT/Prod), please contact your platform/DevOps team or solution architect.
-
----
-
-## 🔗 Reference: Using Managed Identity from ADF to Logic App
-
-This solution leverages the secure practice of calling the Logic App from ADF using **Managed Identity** through a Web Activity.
-
-### 🔄 ADF → Logic App via Web Activity (Managed Identity)
-
-- Use **Web Activity** in ADF to trigger the Logic App endpoint.
-- In the Web Activity settings:
-  - Select `Authentication` = `Managed Identity`
-  - Use `System Assigned Managed Identity` from ADF
-  - Add the Logic App's **"Managed Identity Caller"** role for the ADF identity
-
-📚 **Official guide:**
-👉 [Use Azure Data Factory to invoke Logic App via Managed Identity](https://techcommunity.microsoft.com/blog/integrationsonazureblog/use-azure-data-factory-to-invoke-logic-app-via-managed-identity-authentication/3804218)
-
-> This ensures that all communication is secured via Azure AD without the need for secrets or hardcoded tokens.
+📚 [Using ADF Web Activity with Managed Identity](https://techcommunity.microsoft.com/blog/integrationsonazureblog/use-azure-data-factory-to-invoke-logic-app-via-managed-identity-authentication/3804218)
 
 ---
 
-## 📊 Integration Flow (Mermaid Diagram)
+## 📊 Integration Flow (Pattern 1 - Web Activity)
 
 ```mermaid
 sequenceDiagram
@@ -171,40 +149,84 @@ sequenceDiagram
     participant Email as Recipient
 
     ADF->>LogicApp: HTTP POST (with Managed Identity)
-    LogicApp->>LogicApp: Validate & Parse Payload
-    LogicApp->>ACS: Send Email (using Managed Identity)
+    LogicApp->>ACS: Send Email
     ACS-->>LogicApp: 202 Accepted (or error)
-    LogicApp-->>ADF: Response (200 OK or failure)
+    LogicApp-->>ADF: Response
     ACS-->>Email: Delivers Email Notification
 ```
 
-This sequence diagram shows how ADF communicates securely with Logic App and forwards alert notifications through Azure Communication Services.
+---
+
+## 📊 Integration Flow (Pattern 2 - Azure Monitor)
+
+```mermaid
+sequenceDiagram
+    participant AzureMonitor as Azure Monitor (Alert)
+    participant LogicApp as Azure Logic App
+    participant LogAnalytics as Log Analytics
+    participant ACS as Azure Communication Services
+    participant Email as Recipient
+
+    AzureMonitor->>LogicApp: Secure Webhook (AAD Token)
+    LogicApp->>LogAnalytics: Query ADF Status
+    LogAnalytics-->>LogicApp: Pipeline Run Details
+    LogicApp->>ACS: Send Email
+    ACS-->>LogicApp: 202 Accepted (or error)
+    ACS-->>Email: Delivers Email Notification
+```
 
 ---
 
-## ⚠️ Configuration Required Before Use
+## ⚠️ Configuration Before Use
 
-Before deploying this Logic App, make sure to modify the following attributes in the **email HTTP request body**:
+Ensure the following:
 
-```json
-"body": {
-    "senderAddress": "DoNotReply@preedee.space",
+- ⚙️ `senderAddress` in ACS is verified
+- ✅ Azure Monitor Alert uses **Secure Webhook**
+- 🛡️ Audience is set to `api://<app-id>` of Logic App App Registration
+- 👤 Object ID from Action Group Identity is added to Logic App Authorization Policy
+
+---
+
+## 📎 File Samples
+
+- [`alert_custom.json`](./alert_custom.json) – Payload format from ADF Web Activity (Pattern 1)
+- [`alert_azure_monitor.json`](./alert_azure_monitor.json) – Common Alert Schema from Azure Monitor (Pattern 2)
+
+---
+
+## 📣 Contact
+
+For enhancements, deployment help, or platform alignment:
+> Contact your platform/DevOps team or cloud solution architect.
+---
+
+## 🧾 Notes When Using the Example Files (`alert_custom.json` / `alert_azure_monitor.json`)
+
+When using these sample alert payloads in your environment, make sure you:
+
+1. 🔐 **Configure your verified sender properly**:
+    ```json
+    "senderAddress": "DoNotReply@preedee.space"
+    ```
+    Replace `DoNotReply@preedee.space` with your **verified sender email address** registered in **Azure Communication Services (ACS)**.
+
+2. 🧑‍💼 **Specify actual recipient addresses**:
+    ```json
     "recipients": {
         "to": [
             {
-                "address": "XXXX",
+                "address": "XXX",
                 "displayName": "XXX"
             }
         ]
-    },
-    "content": {
-        "subject": "@outputs('Set_Subject')",
-        "html": "@outputs('Set_Body')"
     }
-}
-```
+    ```
+    Replace `XXX` with **valid email addresses** that you want to send the notification to.
 
-- 🔧 Replace `senderAddress` with your **verified sender** in Azure Communication Services
-- 🧑‍💼 Replace the `recipients.to` with your actual recipient(s) for the email
+3. 📧 **Keep placeholders dynamic**:
+    Ensure that:
+    - `@outputs('Set_Subject')` refers to your dynamic subject
+    - `@outputs('Set_Body')` is the dynamic HTML body content generated inside the Logic App workflow.
 
-> 💡 This step is required to ensure successful email delivery. Azure Communication Services will reject requests using unverified or placeholder sender addresses.
+> ⚠️ Azure Communication Services will **reject** email requests using **unverified sender addresses** or malformed payloads.
