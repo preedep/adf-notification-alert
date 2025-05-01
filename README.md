@@ -6,141 +6,24 @@ This Logic App is designed to handle **ADF pipeline status notifications** (both
 
 ## ✅ Use Case
 
-This Logic App acts as a common notification endpoint for ADF pipelines across multiple applications in the organization. It supports **two patterns** of notification input:
+This Logic App acts as a common notification endpoint for ADF pipelines across multiple applications in the organization. It supports **three patterns** of notification input:
 
-### 🔹 Pattern 1: Custom ADF Web Activity
+### 🔹 Pattern 1: Custom ADF Web Activity (Managed Identity Auth)
 ADF calls this Logic App via HTTP `POST` Web Activity with a defined payload schema. Authentication is handled via **Managed Identity** of ADF.
 
 ### 🔸 Pattern 2: Azure Monitor Alert (Common Schema)
 Azure Monitor Metric Alerts (e.g., for ADF failures/success) trigger this Logic App using a **secure webhook** (with AAD auth). The Logic App queries **Log Analytics** to enrich the alert before sending the email.
 
+👉 See Azure Common Alert Schema documentation: [Common Alert Schema Format (Microsoft Docs)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-common-schema)
+
+### 🔹 Pattern 3: Splunk-Compatible ADF Event with API Key Auth
+This new pattern allows integration with systems like Splunk via simple event-based HTTP POST. It uses **API Key authentication** passed in HTTP headers. Logic App validates the `x-api-key` against a secret stored in **Azure Key Vault**.
+
 ---
 
 ## 📬 How It Works
 
-### Pattern 1 - Web Activity Trigger (Custom Payload)
-
-1. ADF pipeline calls this Logic App via HTTP POST with predefined payload
-2. Logic App:
-   - Parses the JSON payload
-   - Composes HTML Email body + subject
-   - Sends email via **ACS Email API**
-   - Retries with exponential backoff if failed
-3. Logic App terminates after success or maximum retries
-
-### Pattern 2 - Azure Monitor Common Alert Trigger
-
-1. Azure Monitor fires **Metric Alert** → triggers this Logic App via **Secure Webhook**
-2. Logic App:
-   - Authorizes via AAD using **audience: api://<APP_ID>**
-   - Parses Common Alert Schema
-   - Queries Log Analytics for detailed ADF pipeline run
-   - Composes and sends formatted HTML email via **ACS**
-   - Retries on failure
-
----
-
-## 📦 Payload Specifications
-
-### Pattern 1 - Custom Payload
-
-See: [`alert_custom.json`](./alert_custom.json)
-
-#### Required Fields
-
-| Field                | Type     | Description                                |
-|----------------------|----------|--------------------------------------------|
-| `severity`           | string   | `high` = failed, `info` = completed        |
-| `version`            | string   | Fixed version tag, e.g., `"1.0a"`          |
-| `resource_group`     | string   | ADF resource group                         |
-| `app_name`           | string   | App/system name, e.g., `ccwp`              |
-| `service_name`       | string   | ADF name (Data Factory name)              |
-| `pipeline_name`      | string   | ADF pipeline name                          |
-| `execution_date_time`| string   | Format `dd/MM/yyyy HH:mm:ss`              |
-| `message`            | string   | Message to include in email                |
-
-#### Optional Fields
-
-| Field               | Type       | Description                                |
-|---------------------|------------|--------------------------------------------|
-| `batch_date`        | string     | Format `dd/MM/yyyy`                         |
-| `error_code`        | string     | Only relevant if `severity = high`         |
-
----
-
-### Pattern 2 - Azure Monitor Alert (Common Schema)
-
-See: [`alert_azure_monitor.json`](./alert_azure_monitor.json)
-
-- The Logic App expects **Common Alert Schema** payload via secure webhook
-- Enriches data from Log Analytics via Managed Identity query
-
----
-
-## 📧 Email Template Overview
-
-- **Subject**:  
-  `ADF Fail : APP_NAME/RG/SCB/PIPELINE_NAME  **<datetime>**`  
-  _(or `ADF Completed : ...` if severity is info)_
-
-- **Body (HTML)**:
-  Includes:
-  - App name, RG, Service name
-  - Pipeline
-  - Execution time
-  - Message (and error code if failure)
-
----
-
-## 🔄 Retry Mechanism
-
-- Maximum **3 retry attempts**
-- Uses **exponential backoff** (5s, 10s, 20s...)
-- Stop when:
-  - `statusCode == 202` (email accepted)
-  - Or retries exhausted
-
----
-
-## 🛠️ Extending This Workflow
-
-You can easily extend this Logic App to:
-- Send notification to **Microsoft Teams**
-- Push data to **Azure Monitor / Log Analytics**
-- Log status to external services or databases
-- Add more conditions for dynamic routing
-
----
-
-## 🔐 Authorization
-
-### Pattern 1 - Custom ADF Call
-
-- Uses **System Assigned Managed Identity** of ADF
-- Logic App requires "Managed Identity Caller" role assignment
-
-```http
-Authorization: Managed Identity (automatically handled by ADF)
-```
-
-### Pattern 2 - Azure Monitor Alert (Secure Webhook)
-
-- Azure Monitor Action Group (Azns AAD Webhook) calls Logic App with **AAD token**
-- Logic App trigger uses `Authorize with AAD` policy
-- Required:
-  - `audience`: `api://<app-id>` from Logic App App Registration (Expose API)
-  - `Object ID`: from Azure Monitor Action Group Identity
-
----
-
-## 🔗 ADF to Logic App Setup
-
-📚 [Using ADF Web Activity with Managed Identity](https://techcommunity.microsoft.com/blog/integrationsonazureblog/use-azure-data-factory-to-invoke-logic-app-via-managed-identity-authentication/3804218)
-
----
-
-## 📊 Integration Flow (Pattern 1 - Web Activity)
-
+### Pattern 1 - Web Activity Trigger (Custom Payload with Managed Identity)
 ```mermaid
 sequenceDiagram
     participant ADF as Azure Data Factory (ADF)
@@ -155,10 +38,7 @@ sequenceDiagram
     ACS-->>Email: Delivers Email Notification
 ```
 
----
-
-## 📊 Integration Flow (Pattern 2 - Azure Monitor)
-
+### Pattern 2 - Azure Monitor Alert Trigger
 ```mermaid
 sequenceDiagram
     participant AzureMonitor as Azure Monitor (Alert)
@@ -175,30 +55,67 @@ sequenceDiagram
     ACS-->>Email: Delivers Email Notification
 ```
 
+### Pattern 3 - API Event via API Key Auth (e.g., Splunk)
+```mermaid
+sequenceDiagram
+    participant System as External System (e.g. Splunk)
+    participant LogicApp as Logic App (API Key Auth)
+    participant KeyVault as Azure Key Vault
+    participant ACS as Azure Communication Services
+    participant Email as Email Recipient
+
+    System->>LogicApp: HTTP POST + x-api-key header
+    LogicApp->>KeyVault: GET Secret (API Key)
+    KeyVault-->>LogicApp: Return Secret
+    LogicApp->>LogicApp: Compare keys
+    alt Key match
+        LogicApp->>ACS: Send Email
+        ACS-->>LogicApp: 202 Accepted
+        ACS-->>Email: Deliver
+    else Key mismatch
+        LogicApp-->>System: 403 Forbidden
+    end
+```
+
 ---
 
-## ⚠️ Configuration Before Use
+## 📦 Payload Specifications
 
-Ensure the following:
+### Pattern 1 - Custom Payload (ADF Web Activity)
+See: `alert_custom.json`
 
-- ⚙️ `senderAddress` in ACS is verified
-- ✅ Azure Monitor Alert uses **Secure Webhook**
-- 🛡️ Audience is set to `api://<app-id>` of Logic App App Registration
-- 👤 Object ID from Action Group Identity is added to Logic App Authorization Policy
+### Pattern 3 - Splunk-Compatible Payload with API Key
+See: `alert_custom_splunk_payload.json`
+
+#### Example cURL Request:
+```bash
+curl -v -X POST "https://prod-20.southeastasia.logic.azure.com:443/workflows/f57fdda1f66c4d94b4130d5259f0f689/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0"   -H "Content-Type: application/json"   -H "x-api-key: 123456789"   -d '{
+    "event": {
+        "subject": "ADF Success",
+        "env": "dev",
+        "severity": "high",
+        "version": "1.0",
+        "resource_group": "RG-SEA-HRO-SIT-001",
+        "app_name": "sit-hro-ied",
+        "batch_date": "01/05/2025",
+        "execution_date_time": "01/05/2025 12:35:00",
+        "service_name": "scbhroseaadf001sit",
+        "pipeline_name": "sit-hro-ied",
+        "message": "Process Job1 Success"
+    }
+}'
+```
 
 ---
 
-## 📎 File Samples
-
-- [`alert_custom.json`](./alert_custom.json) – Payload format from ADF Web Activity (Pattern 1)
-- [`alert_azure_monitor.json`](./alert_azure_monitor.json) – Common Alert Schema from Azure Monitor (Pattern 2)
+## 🔗 ADF to Logic App Setup
+📚 [Using ADF Web Activity with Managed Identity](https://techcommunity.microsoft.com/blog/integrationsonazureblog/use-azure-data-factory-to-invoke-logic-app-via-managed-identity-authentication/3804218)
 
 ---
 
 ## 📣 Contact
+If you have any questions regarding the usage of each pattern, please reach out via the Contact section in this GitHub repository.
 
-For enhancements, deployment help, or platform alignment:
-> Contact your platform/DevOps team or cloud solution architect.
 ---
 
 ## 🧾 Notes When Using the Example Files (`alert_custom.json` / `alert_azure_monitor.json`)

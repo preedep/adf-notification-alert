@@ -1,1 +1,2 @@
 .env
+curl_logic_app_splunk_local.sh
