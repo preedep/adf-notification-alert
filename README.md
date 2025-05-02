@@ -32,8 +32,14 @@ ADFActivity
 | extend ConcatenatedErrors = strcat_array(ErrorMessages, "\n")
 ```
 
-### 🔹 Pattern 3: Splunk-Compatible ADF Event with API Key
-Integrates with external systems like Splunk using **API Key** in HTTP header `x-api-key`.
+### 🔹 Pattern 3: Splunk-Compatible ADF Event
+Integrates with external systems like Splunk using either:
+- `x-api-key` header compared to secret in Key Vault
+- or **Managed Identity** authentication (for secure internal use)
+
+#### Example Files:
+- `alert_custom_splunk_payload.json` – Auth via API Key
+- `alert_custom_splunk_payload_msi.json` – Auth via Managed Identity
 
 ---
 
@@ -115,7 +121,7 @@ sequenceDiagram
 }
 ```
 
-### Example cURL (Pattern 3)
+### Example cURL (Pattern 3 - API Key)
 
 ```bash
 curl -v -X POST "https://<your_logic_app_url>" \
@@ -151,9 +157,10 @@ curl -v -X POST "https://<your_logic_app_url>" \
 - Audience: `api://<logic-app-app-id>`
 
 ### Pattern 3
-- Auth: **x-api-key** header
-- Logic App compares with secret from **Azure Key Vault**
-- **Key Vault must allow public access** (for Logic App Consumption Plan)
+- Option 1: **x-api-key** header – Logic App compares with Key Vault secret
+- Option 2: **Managed Identity** – Uses system-assigned identity for secured internal calls
+
+**Note**: If using API Key, **Azure Key Vault must allow public access** (required for Logic App Consumption Plan)
 
 ---
 
@@ -173,5 +180,3 @@ curl -v -X POST "https://<your_logic_app_url>" \
 ## 📣 Contact
 
 For questions about any pattern, please open an issue or discussion in this repository.
-
----
