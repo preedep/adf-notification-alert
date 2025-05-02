@@ -83,6 +83,8 @@ sequenceDiagram
 
 ### Pattern 1 - Custom Payload (ADF Web Activity)
 See: `alert_custom.json`
+See: `alert_custom_splunk_payload_msi.json` (Use MSI for Splunk Payload - Backward compatible)
+
 
 ### Pattern 3 - Splunk-Compatible Payload with API Key
 See: `alert_custom_splunk_payload.json`

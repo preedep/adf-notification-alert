@@ -1,0 +1,397 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_a_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "event": {
+                                "type": "object",
+                                "properties": {
+                                    "subject": {
+                                        "type": "string"
+                                    },
+                                    "env": {
+                                        "type": "string"
+                                    },
+                                    "severity": {
+                                        "type": "string"
+                                    },
+                                    "version": {
+                                        "type": "string"
+                                    },
+                                    "resource_group": {
+                                        "type": "string"
+                                    },
+                                    "app_name": {
+                                        "type": "string"
+                                    },
+                                    "batch_date": {
+                                        "type": "string"
+                                    },
+                                    "execution_date_time": {
+                                        "type": "string"
+                                    },
+                                    "service_name": {
+                                        "type": "string"
+                                    },
+                                    "pipeline_name": {
+                                        "type": "string"
+                                    },
+                                    "message": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "conditions": [
+                    {
+                        "expression": "@startsWith(triggerOutputs()?['headers']?['Authorization'], 'Bearer')"
+                    }
+                ],
+                "operationOptions": "IncludeAuthorizationHeadersInOutputs"
+            }
+        },
+        "actions": {
+            "Initialize_Email_Sender_Name": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "sender_name",
+                            "type": "string",
+                            "value": "DoNotReply@preedee.space"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_mailSentSuccess": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_Email_To": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "email_to",
+                            "type": "array",
+                            "value": [
+                                {
+                                    "address": "xxx@abc.com",
+                                    "displayName": "Nick"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Email_Sender_Name": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_mailRetryCount": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "retryCount",
+                            "type": "Integer",
+                            "value": 0
+                        }
+                    ]
+                },
+                "runAfter": {}
+            },
+            "Initialize_mailSentSuccess": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "mailSentSuccess",
+                            "type": "Boolean",
+                            "value": false
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_mailRetryCount": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Check_for_Append_MS_Team_Endpoint": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "equals": [
+                                "@toLower(triggerBody()?['event']?['severity'])",
+                                "high"
+                            ]
+                        }
+                    ]
+                },
+                "actions": {
+                    "Append_to_array_variable": {
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "email_to",
+                            "value": {
+                                "address": "xxxx@gmail.com",
+                                "displayName": "abc xyz"
+                            }
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "Initialize_Email_To": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Set_Subject": {
+                "type": "Compose",
+                "inputs": "@concat('ADF ', if(equals(toLower(triggerBody()?['event']?['severity']), 'high'), 'Fail', 'Completed'), ' : ', toUpper(triggerBody()?['event']?['app_name']), '/', toUpper(triggerBody()?['event']?['resource_group']), '/SCB/', triggerBody()?['event']?['pipeline_name'], '  **', triggerBody()?['event']?['execution_date_time'], '**')",
+                "runAfter": {
+                    "Check_for_Append_MS_Team_Endpoint": [
+                        "Succeeded",
+                        "Failed"
+                    ]
+                }
+            },
+            "Set_Body": {
+                "type": "Compose",
+                "inputs": "@concat('<b>Mail message from ADF</b><br/><br/><br/><b>Resource Group:</b> ', toUpper(triggerBody()?['event']?['resource_group']), '<br/><b>App Name:</b> ', toUpper(triggerBody()?['event']?['app_name']), '<br/><b>Service Name:</b> ', triggerBody()?['event']?['service_name'], '<br/><b>Pipeline:</b> ', coalesce(triggerBody()?['event']?['pipeline_name'], 'N/A'), '<br/><b>Date :</b> ', coalesce(triggerBody()?['event']?['execution_date_time'], 'N/A'), '<br/><br/>', if(equals(toLower(triggerBody()?['event']?['severity']), 'high'), concat('<b>Error Code:</b> ', coalesce(triggerBody()?['event']?['error_code'], 'N/A'), '<br/><b>Message:</b> ', triggerBody()?['event']?['message']), concat('<b>Message:</b> ', triggerBody()?['event']?['message'])))",
+                "runAfter": {
+                    "Set_Subject": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Log_Entry": {
+                "type": "Compose",
+                "inputs": {
+                    "severity": "@triggerBody()?['event']?['severity']",
+                    "subject": "@outputs('Set_Subject')",
+                    "timestamp": "@utcNow()",
+                    "pipeline": "@triggerBody()?['event']?['pipeline_name']",
+                    "status_message": "@triggerBody()?['event']?['message']"
+                },
+                "runAfter": {
+                    "Set_Body": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Until_Send_Email": {
+                "type": "Until",
+                "expression": "@or(equals(variables('retryCount'), 3), variables('mailSentSuccess'))",
+                "limit": {
+                    "count": 3,
+                    "timeout": "PT3M"
+                },
+                "actions": {
+                    "Send_Email_Try": {
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "https://nickcsdev003.asiapacific.communication.azure.com/emails:send?api-version=2023-03-31",
+                            "method": "POST",
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "body": {
+                                "senderAddress": "DoNotReply@preedee.space",
+                                "recipients": {
+                                    "to": "@variables('email_to')"
+                                },
+                                "content": {
+                                    "subject": "@outputs('Set_Subject')",
+                                    "html": "@outputs('Set_Body')"
+                                }
+                            },
+                            "authentication": {
+                                "type": "ManagedServiceIdentity",
+                                "audience": "https://communication.azure.com/"
+                            }
+                        }
+                    },
+                    "Debug_StatusCode": {
+                        "type": "Compose",
+                        "inputs": "@outputs('Send_Email_Try')",
+                        "runAfter": {
+                            "Send_Email_Try": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Check_Send_Status": {
+                        "type": "If",
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@outputs('Send_Email_Try')?['statusCode']",
+                                        202
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Set_Mail_Success": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                    "name": "mailSentSuccess",
+                                    "value": true
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {}
+                        },
+                        "runAfter": {
+                            "Send_Email_Try": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Check_Need_Increment": {
+                        "type": "If",
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@variables('mailSentSuccess')",
+                                        false
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Increment_Retry": {
+                                "type": "IncrementVariable",
+                                "inputs": {
+                                    "name": "retryCount",
+                                    "value": 1
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {}
+                        },
+                        "runAfter": {
+                            "Check_Send_Status": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Check_Need_Delay": {
+                        "type": "If",
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@variables('mailSentSuccess')",
+                                        false
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Delay_Between_Attempts": {
+                                "type": "Wait",
+                                "inputs": {
+                                    "interval": {
+                                        "count": "@if(equals(variables('retryCount'), 0), 5, if(equals(variables('retryCount'), 1), 10, if(equals(variables('retryCount'), 2), 20, if(equals(variables('retryCount'), 3), 40, 60))))",
+                                        "unit": "Second"
+                                    }
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {}
+                        },
+                        "runAfter": {
+                            "Check_Need_Increment": [
+                                "Succeeded"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Log_Entry": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Terminate_On_Success": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "equals": [
+                                "@variables('mailSentSuccess')",
+                                true
+                            ]
+                        }
+                    ]
+                },
+                "actions": {
+                    "Response": {
+                        "type": "Response",
+                        "kind": "Http",
+                        "inputs": {
+                            "statusCode": 200,
+                            "body": {
+                                "message": "✅ Email sent successfully. Terminated cleanly."
+                            }
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Response_Sent_Mail_Failed": {
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 500,
+                                "body": "Send Mail Failed"
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Until_Send_Email": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {}
+        }
+    }
+}
